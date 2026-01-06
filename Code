@@ -1,0 +1,111 @@
+(function () {
+    'use strict';
+
+    let giftCode = null;
+    let giftToken = null;
+    let polling = false;
+
+    const origin = location.origin;
+    const referer = location.href;
+
+    const log  = (...a) => console.log('[PyZyraHT]', ...a);
+    const warn = (...a) => console.warn('[PyZyraHT]', ...a);
+    const err  = (...a) => console.error('[PyZyraHT]', ...a);
+
+    log('Bypass Yeulink By Youtuber PyZyraHT');
+
+    function tryStart() {
+        if (giftCode && giftToken && !polling) {
+            log('Tiến hành bypass..');
+            startPolling();
+        }
+    }
+
+    const xhrOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function (m, u) {
+        this._url = u;
+        return xhrOpen.apply(this, arguments);
+    };
+
+    const xhrSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function (body) {
+        if (this._url?.includes('yeulink.com/step')) {
+            try {
+                if (body instanceof FormData) {
+                    giftCode  = body.get('code');
+                    giftToken = body.get('token');
+                } else if (typeof body === 'string') {
+                    const p = new URLSearchParams(body);
+                    giftCode  = p.get('code');
+                    giftToken = p.get('token');
+                }
+                tryStart();
+            } catch (e) {
+                err('Lỗi:', e);
+            }
+        }
+        return xhrSend.apply(this, arguments);
+    };
+
+    const nativeFetch = window.fetch;
+    window.fetch = async function (...args) {
+        const [url, opt] = args;
+
+        if (typeof url === 'string' && url.includes('yeulink.com/step') && opt?.body) {
+            try {
+                if (opt.body instanceof FormData) {
+                    giftCode  = opt.body.get('code');
+                    giftToken = opt.body.get('token');
+                } else if (typeof opt.body === 'string') {
+                    const p = new URLSearchParams(opt.body);
+                    giftCode  = p.get('code');
+                    giftToken = p.get('token');
+                }
+                tryStart();
+            } catch (e) {
+                err('Lỗi:', e);
+            }
+        }
+
+        return nativeFetch.apply(this, args);
+    };
+
+    setTimeout(() => {
+        const btn = [...document.querySelectorAll('button')]
+            .find(b => b.innerText.trim() === 'GIFT CODE');
+
+        if (btn) {
+            btn.click();
+            log('Đang lấy mã, chờ một lát..');
+        } else {
+            warn('Không tìm thấy nút gift code!');
+        }
+    }, 500);
+
+    function startPolling() {
+        polling = true;
+
+        const iv = setInterval(() => {
+            fetch('https://yeulink.com/continue', {
+                method: 'POST',
+                headers: {
+                    'content-type': 'application/x-www-form-urlencoded',
+                    origin,
+                    referer
+                },
+                body: `code=${encodeURIComponent(giftCode)}&token=${encodeURIComponent(giftToken)}`
+            })
+            .then(r => r.json())
+            .then(d => {
+                if (d?.success && d.code) {
+                    clearInterval(iv);
+                    log('========================');
+                    log('Mã của bạn:', d.code);
+                    log('========================');
+                }
+            })
+            .catch(() => {});
+        }, 2000);
+    }
+
+})();
